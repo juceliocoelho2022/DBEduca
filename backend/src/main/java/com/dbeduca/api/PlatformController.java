@@ -15,7 +15,8 @@ public class PlatformController {
         return List.of(
             new EngineInfo(DatabaseEngine.POSTGRESQL.name(), "PostgreSQL", "SQL relacional"),
             new EngineInfo(DatabaseEngine.MYSQL.name(), "MySQL", "SQL relacional"),
-            new EngineInfo(DatabaseEngine.MONGODB.name(), "MongoDB", "NoSQL documental")
+            new EngineInfo(DatabaseEngine.MONGODB.name(), "MongoDB", "NoSQL documental"),
+            new EngineInfo(DatabaseEngine.ORACLE.name(), "Oracle", "SQL relacional")
         );
     }
 
