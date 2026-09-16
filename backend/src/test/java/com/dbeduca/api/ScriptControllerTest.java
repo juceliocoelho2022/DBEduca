@@ -22,7 +22,8 @@ class ScriptControllerTest {
     void listsSupportedEngines() throws Exception {
         mvc.perform(get("/api/v1/platform/engines"))
             .andExpect(status().isOk())
-            .andExpect(jsonPath("$[0].id").value("POSTGRESQL"));
+            .andExpect(jsonPath("$[0].id").value("POSTGRESQL"))
+            .andExpect(jsonPath("$[3].id").value("ORACLE"));
     }
 
     @Test
