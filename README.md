@@ -1,47 +1,131 @@
-# DBEduca — Plataforma Educacional de Bancos de Dados
+<div align="center">
 
-O **DBEduca** é um laboratório educacional para ensinar modelagem, SQL e NoSQL de forma prática. O aluno escolhe uma tecnologia, define a estrutura dos dados e o sistema gera o script correspondente com validações básicas de segurança.
+# DBEduca
 
-## MVP 0.1
+### Plataforma educacional para aprender Banco de Dados na prática
 
-Nesta versão:
+Modelagem visual • SQL • NoSQL • geração de scripts • laboratório multi-banco
 
-- Java 21 + Spring Boot 3.5.5 no backend;
-- React 19 no frontend;
-- PostgreSQL, MySQL e MongoDB como engines iniciais;
-- modelagem simples de tabela/collection;
-- campos dinâmicos;
-- PRIMARY KEY, NOT NULL e UNIQUE;
-- geração de DDL PostgreSQL/MySQL;
-- geração de script MongoDB;
+![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
+![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.5-6DB33F?logo=springboot&logoColor=white)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-supported-4169E1?logo=postgresql&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-supported-4479A1?logo=mysql&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-supported-47A248?logo=mongodb&logoColor=white)
+![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+
+</div>
+
+---
+
+## Sobre o projeto
+
+O **DBEduca** é uma plataforma educacional criada para aproximar o ensino de banco de dados da prática profissional.
+
+A proposta é permitir que o aluno escolha uma tecnologia, modele a estrutura de dados e visualize o script correspondente, aprendendo conceitos como tabelas, collections, tipos de dados, chave primária, restrições e diferenças entre bancos relacionais e NoSQL.
+
+O projeto foi desenhado para evoluir de um gerador didático de scripts para um **laboratório educacional completo**, com execução controlada, editor SQL/NoSQL, atividades, correção automática, acompanhamento do professor e tutor de IA.
+
+> **Status atual:** MVP 0.1 — geração e validação de scripts. A execução arbitrária de comandos enviados pelo navegador ainda não faz parte desta versão.
+
+---
+
+## Objetivos
+
+- tornar o estudo de Banco de Dados mais visual e prático;
+- permitir comparação entre diferentes engines;
+- gerar SQL/NoSQL a partir da estrutura definida pelo aluno;
+- oferecer uma arquitetura extensível para novos bancos;
+- preparar um ambiente seguro para execução de exercícios em laboratório;
+- evoluir para uma plataforma com perfis de Administrador, Professor e Aluno.
+
+---
+
+## Funcionalidades disponíveis no MVP 0.1
+
+- seleção entre **PostgreSQL**, **MySQL** e **MongoDB**;
+- definição de tabela ou collection;
+- criação dinâmica de campos;
+- configuração de `PRIMARY KEY`;
+- configuração de `NOT NULL`;
+- configuração de `UNIQUE`;
+- geração de DDL para PostgreSQL;
+- geração de DDL para MySQL;
+- geração de scripts para MongoDB;
 - validação de identificadores no backend;
-- tema claro/escuro;
-- Docker Compose com os três bancos;
+- interface React com tema claro/escuro;
+- API REST em Spring Boot;
+- Docker Compose com PostgreSQL, MySQL e MongoDB;
 - testes unitários do núcleo e testes MVC da API.
 
-> Por segurança, o MVP gera os comandos mas **não executa SQL arbitrário enviado pelo navegador**. A execução controlada em sandbox é o objetivo do Sprint 2.
+---
 
 ## Arquitetura
 
 ![Visão geral do DBEduca](docs/assets/dbeduca-architecture.png)
 
 ```text
-React
-  |
-  v
-Spring Boot REST API
-  |
-  v
-ScriptGeneratorRegistry
-  |---------------------------|
-  v             v             v
-PostgreSQL     MySQL        MongoDB
-Adapter        Adapter       Adapter
+┌──────────────────────────────┐
+│          React 19            │
+│      Interface do aluno      │
+└──────────────┬───────────────┘
+               │ HTTP/JSON
+               ▼
+┌──────────────────────────────┐
+│ Java 21 + Spring Boot 3.5.5  │
+│          REST API            │
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│   ScriptGeneratorRegistry    │
+└───────┬─────────┬────────────┘
+        │         │
+        │         │
+        ▼         ▼           ▼
+  PostgreSQL    MySQL      MongoDB
+   Adapter      Adapter      Adapter
 ```
 
-A interface `ScriptGenerator` permite adicionar Oracle, SQL Server, SQLite, Redis e outros bancos sem acoplar o domínio à interface web.
+O contrato `ScriptGenerator` desacopla o domínio das engines específicas. Essa abordagem permite adicionar Oracle, SQL Server, SQLite, Redis e outras tecnologias sem reescrever a camada web.
 
-## Estrutura
+---
+
+## Stack tecnológica
+
+### Backend
+
+- Java 21;
+- Spring Boot 3.5.5;
+- Spring Web;
+- Spring Boot Actuator;
+- Maven;
+- JUnit 5;
+- testes MVC da API.
+
+### Frontend
+
+- React 19;
+- Vite;
+- JavaScript;
+- CSS responsivo;
+- tema Light/Dark.
+
+### Bancos de dados
+
+- PostgreSQL;
+- MySQL;
+- MongoDB.
+
+### Infraestrutura
+
+- Docker;
+- Docker Compose;
+- Nginx para o frontend containerizado.
+
+---
+
+## Estrutura do repositório
 
 ```text
 DBEduca/
@@ -49,63 +133,93 @@ DBEduca/
 │   ├── pom.xml
 │   ├── Dockerfile
 │   └── src/
+│
 ├── frontend/
 │   ├── package.json
 │   ├── Dockerfile
 │   ├── nginx.conf
 │   └── src/
+│
 ├── docs/
+│   ├── assets/
 │   └── superpowers/
+│
 ├── docker-compose.yml
 ├── .env.example
+├── start.ps1
 └── README.md
 ```
 
-## Subir tudo com Docker Desktop
+---
 
-Na raiz do projeto, você pode usar o atalho:
+## Como executar
 
-```powershell
-.\start.ps1
-```
+### Opção 1 — Docker Compose
 
-Ou executar manualmente:
+Na raiz do projeto:
 
 ```powershell
 Copy-Item .env.example .env
 docker compose up --build
 ```
 
-Depois acesse:
+Ou utilize o atalho:
 
-- Frontend: `http://localhost:3000`
-- Backend: `http://localhost:8080`
-- Health: `http://localhost:8080/actuator/health`
+```powershell
+.\start.ps1
+```
 
-Bancos do laboratório:
+Serviços esperados:
 
-| Banco | Host | Porta externa | Banco | Usuário padrão |
+| Serviço | Endereço |
+|---|---|
+| Frontend | `http://localhost:3000` |
+| Backend | `http://localhost:8080` |
+| Actuator Health | `http://localhost:8080/actuator/health` |
+
+### Bancos do laboratório
+
+| Banco | Host | Porta externa | Database | Usuário padrão |
 |---|---|---:|---|---|
-| PostgreSQL | localhost | 55432 | dbeduca_lab | dbeduca |
-| MySQL | localhost | 53306 | dbeduca_lab | dbeduca |
-| MongoDB | localhost | 57017 | admin | dbeduca |
+| PostgreSQL | `localhost` | `55432` | `dbeduca_lab` | `dbeduca` |
+| MySQL | `localhost` | `53306` | `dbeduca_lab` | `dbeduca` |
+| MongoDB | `localhost` | `57017` | `admin` | `dbeduca` |
 
-As senhas de desenvolvimento estão em `.env.example` e devem ser alteradas antes de qualquer publicação.
+> As credenciais do arquivo `.env.example` são destinadas ao ambiente local de desenvolvimento. Altere-as antes de qualquer publicação.
 
-## Executar sem Docker
+---
+
+## Executar manualmente
 
 ### Backend
 
-Requisitos: Java 21 e Maven 3.9+.
+Requisitos:
+
+- JDK 21 ou superior com suporte a `--release 21`;
+- Maven 3.9+.
 
 ```powershell
 cd backend
-mvn spring-boot:run
+mvn clean spring-boot:run
+```
+
+Para verificar a aplicação:
+
+```powershell
+Invoke-RestMethod http://localhost:8080/actuator/health
+```
+
+Resposta esperada:
+
+```text
+status
+------
+UP
 ```
 
 ### Frontend
 
-Requisitos: Node.js 22+.
+Requisito: Node.js 22+.
 
 ```powershell
 cd frontend
@@ -113,11 +227,17 @@ npm install
 npm run dev
 ```
 
-Abra `http://localhost:5173`.
+Acesse:
 
-## API
+```text
+http://localhost:5173
+```
 
-### Engines disponíveis
+---
+
+## API REST
+
+### Listar engines suportadas
 
 ```http
 GET /api/v1/platform/engines
@@ -155,50 +275,154 @@ Exemplo:
 }
 ```
 
-## Roadmap
+---
 
-### Sprint 2 — Laboratório de execução
-- executor isolado por aluno/projeto;
-- schemas PostgreSQL por projeto;
-- databases MySQL isolados;
-- databases/collections MongoDB isolados;
-- editor SQL/NoSQL;
-- timeout, limite de linhas e bloqueio de operações perigosas;
-- histórico de execução.
+## Exemplo didático
 
-### Sprint 3 — Plataforma educacional
-- login;
-- Spring Security + JWT;
-- RBAC: ADMIN, PROFESSOR e ALUNO;
-- turmas;
-- atividades;
-- correção automática;
-- nota e histórico de tentativas.
+Estrutura definida pelo aluno:
 
-### Sprint 4 — Tutor IA híbrido
-- provider externo;
-- provider local;
-- níveis de dica 1 a 4;
-- contexto da tentativa do aluno;
-- modo prova configurável pelo professor;
-- auditoria de uso da IA.
+```text
+Tabela: alunos
 
-### Sprint 5 — Expansão de engines
-- Oracle;
-- SQL Server;
-- SQLite;
-- Redis;
-- Cassandra.
+id       BIGINT        PRIMARY KEY
+nome     VARCHAR(100)  NOT NULL
+email    VARCHAR(150)  UNIQUE
+```
+
+Saída PostgreSQL/MySQL equivalente:
+
+```sql
+CREATE TABLE alunos (
+    id BIGINT PRIMARY KEY,
+    nome VARCHAR(100) NOT NULL,
+    email VARCHAR(150) UNIQUE
+);
+```
+
+No MongoDB, o mesmo domínio pode ser representado por uma collection e documentos, permitindo que o aluno compare os modelos relacional e documental.
+
+---
 
 ## Testes
+
+Execute os testes do backend com:
 
 ```powershell
 cd backend
 mvn test
 ```
 
-O núcleo de geração também foi desenhado sem dependências de Spring para facilitar testes unitários rápidos.
+O núcleo de geração de scripts possui baixo acoplamento com o Spring para facilitar testes rápidos e evolução dos adapters.
+
+---
 
 ## Segurança pedagógica
 
-O objetivo é permitir experimentação sem dar ao navegador acesso direto às credenciais dos bancos. Nas próximas versões, toda execução deverá passar por políticas de isolamento, timeout, quotas e auditoria no backend.
+O navegador não deve receber credenciais dos bancos nem possuir acesso direto às instâncias de PostgreSQL, MySQL ou MongoDB.
+
+A evolução do laboratório seguirá princípios como:
+
+- isolamento por aluno/projeto;
+- timeout de execução;
+- limite de linhas retornadas;
+- bloqueio de operações perigosas;
+- quotas;
+- auditoria;
+- histórico de comandos;
+- validação no backend.
+
+---
+
+## Roadmap
+
+### Sprint 2 — Laboratório de execução
+
+- [ ] execução controlada no PostgreSQL;
+- [ ] execução controlada no MySQL;
+- [ ] execução controlada no MongoDB;
+- [ ] isolamento por projeto/aluno;
+- [ ] editor SQL/NoSQL;
+- [ ] timeout e limite de resultados;
+- [ ] histórico de execução.
+
+### Sprint 3 — Plataforma educacional
+
+- [ ] autenticação;
+- [ ] Spring Security + JWT;
+- [ ] RBAC com `ADMIN`, `PROFESSOR` e `ALUNO`;
+- [ ] turmas;
+- [ ] atividades;
+- [ ] correção automática;
+- [ ] notas;
+- [ ] histórico de tentativas.
+
+### Sprint 4 — Tutor de IA híbrido
+
+- [ ] provider de IA externo;
+- [ ] provider local;
+- [ ] níveis de ajuda de 1 a 4;
+- [ ] análise da tentativa do aluno;
+- [ ] modo prova configurável;
+- [ ] auditoria do uso da IA.
+
+### Sprint 5 — Expansão de engines
+
+- [ ] Oracle;
+- [ ] SQL Server;
+- [ ] SQLite;
+- [ ] Redis;
+- [ ] Cassandra.
+
+---
+
+## Visão de evolução
+
+```text
+MVP 0.1
+Gerar scripts
+     ↓
+Sprint 2
+Executar em ambiente controlado
+     ↓
+Sprint 3
+Professor + Aluno + Administrador
+     ↓
+Sprint 4
+Tutor pedagógico de IA
+     ↓
+Sprint 5
+Plataforma multi-engine ampliada
+```
+
+---
+
+## Público-alvo
+
+- estudantes de Desenvolvimento de Sistemas;
+- cursos técnicos;
+- professores de Banco de Dados;
+- escolas e instituições de ensino;
+- estudantes iniciantes em SQL e NoSQL;
+- pessoas que desejam comparar diferentes tecnologias de persistência.
+
+---
+
+## Contribuição
+
+O DBEduca está em evolução. Sugestões, issues e pull requests podem contribuir para novos exercícios, adapters, validações e recursos pedagógicos.
+
+---
+
+## Autor
+
+**Jucelio Farias Coelho**
+
+Projeto desenvolvido com foco em educação tecnológica, prática de Banco de Dados e construção de uma plataforma extensível para ensino de SQL e NoSQL.
+
+---
+
+<div align="center">
+
+**DBEduca — do conceito à prática.**
+
+</div>
