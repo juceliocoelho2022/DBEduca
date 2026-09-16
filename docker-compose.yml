@@ -66,10 +66,13 @@ services:
 
   backend:
     build: ./backend
+    environment:
+      ORACLE_JDBC_URL: "jdbc:oracle:thin:@//lab-oracle:1521/FREEPDB1"
+      ORACLE_USERNAME: ${ORACLE_APP_USER:-dbeduca}
+      ORACLE_APP_USER_PASSWORD: ${ORACLE_APP_USER_PASSWORD:-dbeduca123}
     ports:
       - "8080:8080"
     restart: unless-stopped
-
   frontend:
     build: ./frontend
     ports:
