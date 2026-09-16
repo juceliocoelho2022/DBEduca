@@ -13,7 +13,8 @@ public class ApplicationConfig {
         return new ScriptGeneratorRegistry(List.of(
             new PostgresScriptGenerator(),
             new MySqlScriptGenerator(),
-            new MongoScriptGenerator()
+            new MongoScriptGenerator(),
+            new OracleScriptGenerator()
         ));
     }
 }
