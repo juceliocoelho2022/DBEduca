@@ -47,6 +47,23 @@ services:
       timeout: 5s
       retries: 8
 
+  lab-oracle:
+    image: gvenzl/oracle-free:23-slim
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_PASSWORD:-oracle123}
+      APP_USER: ${ORACLE_APP_USER:-dbeduca}
+      APP_USER_PASSWORD: ${ORACLE_APP_USER_PASSWORD:-dbeduca123}
+    ports:
+      - "51521:1521"
+    volumes:
+      - oracle_data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 20
+      start_period: 60s
+
   backend:
     build: ./backend
     ports:
@@ -65,3 +82,4 @@ volumes:
   postgres_data:
   mysql_data:
   mongo_data:
+  oracle_data:
