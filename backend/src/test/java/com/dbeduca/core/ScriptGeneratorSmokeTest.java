@@ -22,6 +22,11 @@ public class ScriptGeneratorSmokeTest {
 
         String mongo = new MongoScriptGenerator().generate(table);
         assertContains(mongo, "db.createCollection(\"alunos\")");
+
+        String oracle = new OracleScriptGenerator().generate(table);
+        assertContains(oracle, "CREATE TABLE alunos");
+        assertContains(oracle, "id NUMBER(19) PRIMARY KEY NOT NULL");
+        assertContains(oracle, "nome VARCHAR2(100) NOT NULL");
     }
 
     private static void assertContains(String actual, String expected) {
