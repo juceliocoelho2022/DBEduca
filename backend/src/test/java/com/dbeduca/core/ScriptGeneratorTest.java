@@ -34,6 +34,15 @@ class ScriptGeneratorTest {
     }
 
     @Test
+    void generatesOracleDdlWithOracleTypes() {
+        var sql = new OracleScriptGenerator().generate(table);
+        assertTrue(sql.contains("CREATE TABLE alunos"));
+        assertTrue(sql.contains("id NUMBER(19) PRIMARY KEY NOT NULL"));
+        assertTrue(sql.contains("nome VARCHAR2(100) NOT NULL"));
+        assertTrue(sql.contains("email VARCHAR2(150) UNIQUE"));
+    }
+
+    @Test
     void rejectsUnsafeIdentifiers() {
         assertThrows(IllegalArgumentException.class,
             () -> new TableDefinition("alunos; DROP TABLE usuarios", table.columns()));
