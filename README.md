@@ -4,14 +4,16 @@
 
 ### Plataforma educacional para aprender Banco de Dados na prática
 
-Modelagem visual • SQL • NoSQL • geração de scripts • laboratório multi-banco
+Modelagem • SQL • NoSQL • geração de scripts • laboratório multi-banco
 
 ![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring%20Boot-3.5.5-6DB33F?logo=springboot&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-supported-4169E1?logo=postgresql&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-supported-4479A1?logo=mysql&logoColor=white)
-![MongoDB](https://img.shields.io/badge/MongoDB-supported-47A248?logo=mongodb&logoColor=white)
+![React](https://img.shields.io/badge/React-19.3-61DAFB?logo=react&logoColor=black)
+![Vite](https://img.shields.io/badge/Vite-8.2.2-646CFF?logo=vite&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-17-4169E1?logo=postgresql&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-8.4-4479A1?logo=mysql&logoColor=white)
+![MongoDB](https://img.shields.io/badge/MongoDB-8.0-47A248?logo=mongodb&logoColor=white)
+![Oracle](https://img.shields.io/badge/Oracle-Free%2023-F80000?logo=oracle&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 
 </div>
@@ -20,13 +22,13 @@ Modelagem visual • SQL • NoSQL • geração de scripts • laboratório mul
 
 ## Sobre o projeto
 
-O **DBEduca** é uma plataforma educacional criada para aproximar o ensino de banco de dados da prática profissional.
+O **DBEduca** é uma plataforma educacional criada para aproximar o ensino de Banco de Dados da prática profissional.
 
-A proposta é permitir que o aluno escolha uma tecnologia, modele a estrutura de dados e visualize o script correspondente, aprendendo conceitos como tabelas, collections, tipos de dados, chave primária, restrições e diferenças entre bancos relacionais e NoSQL.
+O aluno escolhe uma engine, define a estrutura dos dados e visualiza o script correspondente. A proposta é permitir que conceitos como tabelas, collections, tipos de dados, chaves, restrições e diferenças entre bancos relacionais e NoSQL sejam estudados de forma prática.
 
-O projeto foi desenhado para evoluir de um gerador didático de scripts para um **laboratório educacional completo**, com execução controlada, editor SQL/NoSQL, atividades, correção automática, acompanhamento do professor e tutor de IA.
+O projeto evolui de um gerador didático de scripts para um **laboratório educacional multi-engine**, com execução controlada, editor SQL/NoSQL, atividades, correção automática, acompanhamento do professor e tutor de IA.
 
-> **Status atual:** MVP 0.1 — geração e validação de scripts. A execução arbitrária de comandos enviados pelo navegador ainda não faz parte desta versão.
+> **Status atual:** MVP 0.1 evoluindo para o Sprint 2. O sistema já gera scripts para PostgreSQL, MySQL, MongoDB e Oracle e possui containers locais para as quatro engines. A execução arbitrária de comandos enviados pelo navegador ainda não está habilitada.
 
 ---
 
@@ -35,34 +37,46 @@ O projeto foi desenhado para evoluir de um gerador didático de scripts para um 
 - tornar o estudo de Banco de Dados mais visual e prático;
 - permitir comparação entre diferentes engines;
 - gerar SQL/NoSQL a partir da estrutura definida pelo aluno;
-- oferecer uma arquitetura extensível para novos bancos;
-- preparar um ambiente seguro para execução de exercícios em laboratório;
-- evoluir para uma plataforma com perfis de Administrador, Professor e Aluno.
+- mostrar diferenças reais de tipos e sintaxe entre bancos;
+- oferecer uma arquitetura extensível para novas engines;
+- preparar um ambiente seguro para execução de exercícios;
+- evoluir para perfis de Administrador, Professor e Aluno.
 
 ---
 
-## Funcionalidades disponíveis no MVP 0.1
+## Engines suportadas
 
-- seleção entre **PostgreSQL**, **MySQL** e **MongoDB**;
+| Engine | Modelo | Geração de script | Container local | Execução controlada |
+|---|---|---:|---:|---:|
+| PostgreSQL 17 | Relacional | ✅ | ✅ | Sprint 2 |
+| MySQL 8.4 | Relacional | ✅ | ✅ | Sprint 2 |
+| MongoDB 8.0 | Documental | ✅ | ✅ | Sprint 2 |
+| Oracle Database Free 23 | Relacional | ✅ | ✅ | Sprint 2 |
+
+---
+
+## Funcionalidades atuais
+
+- seleção entre PostgreSQL, MySQL, MongoDB e Oracle;
 - definição de tabela ou collection;
 - criação dinâmica de campos;
 - configuração de `PRIMARY KEY`;
 - configuração de `NOT NULL`;
 - configuração de `UNIQUE`;
-- geração de DDL para PostgreSQL;
-- geração de DDL para MySQL;
-- geração de scripts para MongoDB;
+- geração de DDL PostgreSQL;
+- geração de DDL MySQL;
+- geração de script MongoDB;
+- geração de DDL Oracle;
+- adaptação de tipos comuns para Oracle;
 - validação de identificadores no backend;
 - interface React com tema claro/escuro;
-- API REST em Spring Boot;
-- Docker Compose com PostgreSQL, MySQL e MongoDB;
+- API REST com Spring Boot;
+- Docker Compose com quatro bancos;
 - testes unitários do núcleo e testes MVC da API.
 
 ---
 
 ## Arquitetura
-
-![Visão geral do DBEduca](docs/assets/dbeduca-architecture.png)
 
 ```text
 ┌──────────────────────────────┐
@@ -79,49 +93,94 @@ O projeto foi desenhado para evoluir de um gerador didático de scripts para um 
                ▼
 ┌──────────────────────────────┐
 │   ScriptGeneratorRegistry    │
-└───────┬─────────┬────────────┘
-        │         │
-        │         │
-        ▼         ▼           ▼
-  PostgreSQL    MySQL      MongoDB
-   Adapter      Adapter      Adapter
+└──────┬───────┬───────┬──────┘
+       │       │       │
+       ▼       ▼       ▼       ▼
+ PostgreSQL  MySQL   MongoDB  Oracle
+  Adapter    Adapter  Adapter  Adapter
 ```
 
-O contrato `ScriptGenerator` desacopla o domínio das engines específicas. Essa abordagem permite adicionar Oracle, SQL Server, SQLite, Redis e outras tecnologias sem reescrever a camada web.
+O contrato `ScriptGenerator` funciona como ponto de extensão para as engines. O `ScriptGeneratorRegistry` resolve o adapter correspondente sem acoplar a camada web às implementações específicas.
+
+### Padrões e princípios usados
+
+- Adapter / Strategy para engines;
+- Registry Pattern para resolução de geradores;
+- API REST;
+- separação frontend/backend;
+- validação no backend;
+- isolamento de infraestrutura via Docker;
+- evolução incremental orientada a testes.
 
 ---
 
-## Stack tecnológica
+# Stack tecnológica
 
-### Backend
+## Backend
 
-- Java 21;
-- Spring Boot 3.5.5;
+- **Java 21**;
+- **Spring Boot 3.5.5**;
 - Spring Web;
+- Bean Validation / Jakarta Validation;
 - Spring Boot Actuator;
 - Maven;
 - JUnit 5;
-- testes MVC da API.
+- MockMvc / Spring Boot Test.
 
-### Frontend
+## Frontend
 
-- React 19;
-- Vite;
-- JavaScript;
-- CSS responsivo;
-- tema Light/Dark.
+- **React 19.3.0**;
+- **Vite 8.2.2**;
+- JavaScript ES Modules;
+- CSS;
+- tema Light/Dark;
+- Nginx 1.27 no container de produção.
 
-### Bancos de dados
+## Bancos de dados
 
-- PostgreSQL;
-- MySQL;
-- MongoDB.
+- **PostgreSQL 17**;
+- **MySQL 8.4**;
+- **MongoDB 8.0**;
+- **Oracle Database Free 23**.
 
-### Infraestrutura
+## Infraestrutura e DevOps
 
 - Docker;
 - Docker Compose;
-- Nginx para o frontend containerizado.
+- Node.js 22 no estágio de build do frontend;
+- Maven 3.9.11 no estágio de build do backend;
+- Eclipse Temurin 21;
+- Git;
+- GitHub;
+- Nginx.
+
+---
+
+## Oracle no DBEduca
+
+O adapter Oracle converte tipos comuns do modelador para equivalentes adequados ao Oracle.
+
+Exemplos:
+
+| Tipo informado | Oracle |
+|---|---|
+| `BIGINT` | `NUMBER(19)` |
+| `INTEGER` | `NUMBER(10)` |
+| `VARCHAR(100)` | `VARCHAR2(100)` |
+| `TEXT` | `CLOB` |
+| `DECIMAL(10,2)` | `NUMBER(10,2)` |
+| `DATE` | `DATE` |
+| `TIMESTAMP` | `TIMESTAMP` |
+
+Exemplo:
+
+```sql
+CREATE TABLE alunos (
+    id NUMBER(19) PRIMARY KEY NOT NULL,
+    nome VARCHAR2(100) NOT NULL,
+    email VARCHAR2(150) UNIQUE
+);
+```
 
 ---
 
@@ -147,14 +206,13 @@ DBEduca/
 ├── docker-compose.yml
 ├── .env.example
 ├── start.ps1
+├── stop.ps1
 └── README.md
 ```
 
 ---
 
-## Como executar
-
-### Opção 1 — Docker Compose
+## Como executar com Docker
 
 Na raiz do projeto:
 
@@ -163,29 +221,39 @@ Copy-Item .env.example .env
 docker compose up --build
 ```
 
-Ou utilize o atalho:
+Ou:
 
 ```powershell
 .\start.ps1
 ```
 
-Serviços esperados:
+### Serviços
 
 | Serviço | Endereço |
 |---|---|
 | Frontend | `http://localhost:3000` |
 | Backend | `http://localhost:8080` |
-| Actuator Health | `http://localhost:8080/actuator/health` |
+| Health | `http://localhost:8080/actuator/health` |
 
 ### Bancos do laboratório
 
-| Banco | Host | Porta externa | Database | Usuário padrão |
+| Banco | Host | Porta externa | Database/Service | Usuário padrão |
 |---|---|---:|---|---|
 | PostgreSQL | `localhost` | `55432` | `dbeduca_lab` | `dbeduca` |
 | MySQL | `localhost` | `53306` | `dbeduca_lab` | `dbeduca` |
 | MongoDB | `localhost` | `57017` | `admin` | `dbeduca` |
+| Oracle Free | `localhost` | `51521` | `FREEPDB1` | `dbeduca` |
 
-> As credenciais do arquivo `.env.example` são destinadas ao ambiente local de desenvolvimento. Altere-as antes de qualquer publicação.
+Para Oracle, a conexão local segue o formato:
+
+```text
+Host: localhost
+Port: 51521
+Service: FREEPDB1
+User: dbeduca
+```
+
+> As credenciais de `.env.example` são apenas para desenvolvimento local. Troque-as antes de qualquer publicação.
 
 ---
 
@@ -203,18 +271,10 @@ cd backend
 mvn clean spring-boot:run
 ```
 
-Para verificar a aplicação:
+Health check:
 
 ```powershell
 Invoke-RestMethod http://localhost:8080/actuator/health
-```
-
-Resposta esperada:
-
-```text
-status
-------
-UP
 ```
 
 ### Frontend
@@ -237,10 +297,19 @@ http://localhost:5173
 
 ## API REST
 
-### Listar engines suportadas
+### Listar engines
 
 ```http
 GET /api/v1/platform/engines
+```
+
+Resposta inclui:
+
+```text
+POSTGRESQL
+MYSQL
+MONGODB
+ORACLE
 ```
 
 ### Gerar script
@@ -250,11 +319,11 @@ POST /api/v1/scripts/generate
 Content-Type: application/json
 ```
 
-Exemplo:
+Exemplo Oracle:
 
 ```json
 {
-  "engine": "POSTGRESQL",
+  "engine": "ORACLE",
   "tableName": "alunos",
   "columns": [
     {
@@ -277,50 +346,22 @@ Exemplo:
 
 ---
 
-## Exemplo didático
-
-Estrutura definida pelo aluno:
-
-```text
-Tabela: alunos
-
-id       BIGINT        PRIMARY KEY
-nome     VARCHAR(100)  NOT NULL
-email    VARCHAR(150)  UNIQUE
-```
-
-Saída PostgreSQL/MySQL equivalente:
-
-```sql
-CREATE TABLE alunos (
-    id BIGINT PRIMARY KEY,
-    nome VARCHAR(100) NOT NULL,
-    email VARCHAR(150) UNIQUE
-);
-```
-
-No MongoDB, o mesmo domínio pode ser representado por uma collection e documentos, permitindo que o aluno compare os modelos relacional e documental.
-
----
-
 ## Testes
-
-Execute os testes do backend com:
 
 ```powershell
 cd backend
 mvn test
 ```
 
-O núcleo de geração de scripts possui baixo acoplamento com o Spring para facilitar testes rápidos e evolução dos adapters.
+O núcleo de geração foi mantido com baixo acoplamento ao Spring para permitir testes rápidos dos adapters.
 
 ---
 
 ## Segurança pedagógica
 
-O navegador não deve receber credenciais dos bancos nem possuir acesso direto às instâncias de PostgreSQL, MySQL ou MongoDB.
+O navegador não deve receber credenciais nem acessar diretamente as instâncias dos bancos.
 
-A evolução do laboratório seguirá princípios como:
+A execução do Sprint 2 seguirá princípios como:
 
 - isolamento por aluno/projeto;
 - timeout de execução;
@@ -337,9 +378,12 @@ A evolução do laboratório seguirá princípios como:
 
 ### Sprint 2 — Laboratório de execução
 
+- [x] Oracle como quarta engine de geração;
+- [x] Oracle Free no Docker Compose;
 - [ ] execução controlada no PostgreSQL;
 - [ ] execução controlada no MySQL;
 - [ ] execução controlada no MongoDB;
+- [ ] execução controlada no Oracle;
 - [ ] isolamento por projeto/aluno;
 - [ ] editor SQL/NoSQL;
 - [ ] timeout e limite de resultados;
@@ -367,32 +411,10 @@ A evolução do laboratório seguirá princípios como:
 
 ### Sprint 5 — Expansão de engines
 
-- [ ] Oracle;
 - [ ] SQL Server;
 - [ ] SQLite;
 - [ ] Redis;
 - [ ] Cassandra.
-
----
-
-## Visão de evolução
-
-```text
-MVP 0.1
-Gerar scripts
-     ↓
-Sprint 2
-Executar em ambiente controlado
-     ↓
-Sprint 3
-Professor + Aluno + Administrador
-     ↓
-Sprint 4
-Tutor pedagógico de IA
-     ↓
-Sprint 5
-Plataforma multi-engine ampliada
-```
 
 ---
 
@@ -407,22 +429,8 @@ Plataforma multi-engine ampliada
 
 ---
 
-## Contribuição
-
-O DBEduca está em evolução. Sugestões, issues e pull requests podem contribuir para novos exercícios, adapters, validações e recursos pedagógicos.
-
----
-
 ## Autor
 
 **Jucelio Farias Coelho**
 
-Projeto desenvolvido com foco em educação tecnológica, prática de Banco de Dados e construção de uma plataforma extensível para ensino de SQL e NoSQL.
-
----
-
-<div align="center">
-
-**DBEduca — do conceito à prática.**
-
-</div>
+Projeto desenvolvido com foco em educação tecnológica, Banco de Dados e construção de uma plataforma extensível para ensino de SQL e NoSQL.
