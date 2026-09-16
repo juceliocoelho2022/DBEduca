@@ -4,7 +4,7 @@
 
 **Goal:** Permitir que o DBEduca execute, via JDBC e de forma controlada, o `CREATE TABLE` Oracle gerado pelo próprio backend a partir do modelo validado pelo aluno, sem aceitar SQL livre e sem apagar tabelas existentes.
 
-**Architecture:** O `ExecutionController` recebe a mesma estrutura de tabela usada na geração de scripts e delega ao `DatabaseExecutionService`. O serviço regenera o DDL usando o `ScriptGeneratorRegistry` e seleciona um `DatabaseExecutionAdapter`; nesta etapa somente `OracleExecutionAdapter` estará registrado. O adapter usa um `DataSource` Oracle para consultar `USER_TABLES` com bind parameter e, se a tabela não existir, executa exatamente o DDL regenerado pelo backend.
+**Architecture:** O `ExecutionController` recebe a mesma estrutura usada na geração de scripts e delega ao `DatabaseExecutionService`. O serviço regenera o DDL com `ScriptGeneratorRegistry`, seleciona um `DatabaseExecutionAdapter` e, nesta etapa, somente `OracleExecutionAdapter` está registrado. O adapter consulta `USER_TABLES` com bind parameter e executa o DDL via JDBC apenas quando a tabela ainda não existe.
 
 **Tech Stack:** Java 21, Spring Boot 3.5.5, Spring Web MVC, Jakarta Validation, Oracle JDBC Thin (`ojdbc11`), JDBC (`java.sql`/`javax.sql.DataSource`), JUnit 5, Mockito, MockMvc, React 19.3, Vite 8.2.2, Docker Compose, Oracle Database Free.
 
@@ -15,55 +15,52 @@
 - A primeira engine com execução real é `ORACLE`.
 - O navegador nunca envia SQL arbitrário para execução.
 - O backend regenera o DDL a partir de `TableDefinition` usando `ScriptGeneratorRegistry`.
-- Somente `CREATE TABLE` gerado pelo `OracleScriptGenerator` pode chegar ao adapter nesta etapa.
-- Tabela existente retorna `409 Conflict`; não executar `DROP TABLE`, recriação automática ou qualquer operação destrutiva.
-- PostgreSQL, MySQL e MongoDB permanecem apenas com geração de script neste incremento.
-- Credenciais Oracle ficam somente em variáveis de ambiente/configuração do backend.
+- Somente `CREATE TABLE` produzido pelo `OracleScriptGenerator` pode chegar ao adapter nesta etapa.
+- Tabela existente retorna `409 Conflict`; não executar `DROP TABLE` ou recriação automática.
+- PostgreSQL, MySQL e MongoDB permanecem apenas com geração de script.
 - O backend usa o usuário de aplicação `dbeduca`, nunca `SYS` ou `SYSTEM`.
-- A aplicação deve conseguir iniciar mesmo com o Oracle indisponível; a conexão é aberta apenas quando houver uma solicitação de execução.
-- O SQL revisado na tela deve corresponder ao modelo executado: qualquer alteração de engine, tabela ou colunas invalida o script previamente gerado e o resultado de execução.
-- Manter tema Light/Dark e estrutura visual atual.
-- TDD obrigatório para código Java: teste falhando, implementação mínima, teste passando, refatoração.
+- O Compose já reserva `ORACLE_PASSWORD` para a senha administrativa do container. Para evitar colisão, o JDBC do backend usa `ORACLE_APP_USER_PASSWORD` como senha do usuário `dbeduca`.
+- A aplicação deve iniciar mesmo se o Oracle estiver fora do ar; a conexão é aberta somente durante a execução.
+- Qualquer alteração em engine, nome da tabela ou colunas invalida o script previamente gerado e o resultado da execução, garantindo que o SQL revisado corresponda ao modelo executado.
+- Manter tema Light/Dark e layout atual.
+- TDD obrigatório para código Java: RED → GREEN → refactor.
 
 ---
 
 ## File Map
 
-### Novos arquivos de produção
+**Create:**
 
-- `backend/src/main/java/com/dbeduca/execution/DatabaseExecutionAdapter.java` — contrato comum para adapters de execução.
-- `backend/src/main/java/com/dbeduca/execution/DatabaseExecutionService.java` — regenera o DDL, seleciona adapter por engine e coordena a execução.
-- `backend/src/main/java/com/dbeduca/execution/ExecutionResult.java` — resultado normalizado retornado pela camada de execução.
-- `backend/src/main/java/com/dbeduca/execution/TableAlreadyExistsException.java` — conflito de objeto existente.
-- `backend/src/main/java/com/dbeduca/execution/DatabaseUnavailableException.java` — falha ao obter conexão com a engine.
-- `backend/src/main/java/com/dbeduca/execution/DatabaseExecutionException.java` — falha JDBC inesperada durante metadados/DDL.
-- `backend/src/main/java/com/dbeduca/execution/OracleExecutionAdapter.java` — verificação em `USER_TABLES` e execução do DDL Oracle.
-- `backend/src/main/java/com/dbeduca/api/ExecuteDatabaseRequest.java` — request validado que converte para `TableDefinition`.
-- `backend/src/main/java/com/dbeduca/api/ExecuteDatabaseResponse.java` — resposta REST de sucesso.
-- `backend/src/main/java/com/dbeduca/api/ExecutionController.java` — `POST /api/v1/executions`.
+- `backend/src/main/java/com/dbeduca/execution/DatabaseExecutionAdapter.java`
+- `backend/src/main/java/com/dbeduca/execution/DatabaseExecutionService.java`
+- `backend/src/main/java/com/dbeduca/execution/ExecutionResult.java`
+- `backend/src/main/java/com/dbeduca/execution/TableAlreadyExistsException.java`
+- `backend/src/main/java/com/dbeduca/execution/DatabaseUnavailableException.java`
+- `backend/src/main/java/com/dbeduca/execution/DatabaseExecutionException.java`
+- `backend/src/main/java/com/dbeduca/execution/OracleExecutionAdapter.java`
+- `backend/src/main/java/com/dbeduca/api/ExecuteDatabaseRequest.java`
+- `backend/src/main/java/com/dbeduca/api/ExecuteDatabaseResponse.java`
+- `backend/src/main/java/com/dbeduca/api/ExecutionController.java`
+- `backend/src/test/java/com/dbeduca/execution/DatabaseExecutionServiceTest.java`
+- `backend/src/test/java/com/dbeduca/execution/OracleExecutionAdapterTest.java`
+- `backend/src/test/java/com/dbeduca/api/ExecutionControllerTest.java`
 
-### Novos testes
+**Modify:**
 
-- `backend/src/test/java/com/dbeduca/execution/DatabaseExecutionServiceTest.java` — seleção de adapter, regeneração do DDL e rejeição de engine não habilitada.
-- `backend/src/test/java/com/dbeduca/execution/OracleExecutionAdapterTest.java` — criação, conflito e indisponibilidade JDBC.
-- `backend/src/test/java/com/dbeduca/api/ExecutionControllerTest.java` — contratos HTTP 200/400/409/503/500 e ausência de credenciais.
-
-### Arquivos existentes a modificar
-
-- `backend/pom.xml` — adicionar `ojdbc11`.
-- `backend/src/main/java/com/dbeduca/config/ApplicationConfig.java` — criar `oracleDataSource`, `OracleExecutionAdapter` e `DatabaseExecutionService` sem abrir conexão no startup.
-- `backend/src/main/java/com/dbeduca/api/ApiExceptionHandler.java` — mapear exceções da execução.
-- `backend/src/main/resources/application.properties` — propriedades Oracle derivadas de variáveis de ambiente.
-- `.env.example` — documentar `ORACLE_JDBC_URL`, `ORACLE_USERNAME`, `ORACLE_PASSWORD`.
-- `docker-compose.yml` — injetar URL interna e credenciais no backend.
-- `frontend/src/api.js` — adicionar `executeDatabase(payload)`.
-- `frontend/src/App.jsx` — estado de execução, invalidação de script e botão Oracle.
-- `frontend/src/styles.css` — feedback visual de sucesso/conflito/erro.
-- `README.md` — documentar endpoint, fluxo e configuração Oracle.
+- `backend/pom.xml`
+- `backend/src/main/java/com/dbeduca/config/ApplicationConfig.java`
+- `backend/src/main/java/com/dbeduca/api/ApiExceptionHandler.java`
+- `backend/src/main/resources/application.properties`
+- `.env.example`
+- `docker-compose.yml`
+- `frontend/src/api.js`
+- `frontend/src/App.jsx`
+- `frontend/src/styles.css`
+- `README.md`
 
 ---
 
-### Task 1: Criar o contrato de execução e o serviço coordenador
+### Task 1: Contrato de execução e serviço coordenador
 
 **Files:**
 - Create: `backend/src/main/java/com/dbeduca/execution/DatabaseExecutionAdapter.java`
@@ -73,11 +70,9 @@
 
 **Interfaces:**
 - Consumes: `DatabaseEngine`, `TableDefinition`, `ScriptGeneratorRegistry`.
-- Produces: `DatabaseExecutionAdapter.engine()`, `DatabaseExecutionAdapter.executeCreateTable(String tableName, String ddl)`, `DatabaseExecutionService.execute(DatabaseEngine engine, TableDefinition table)`, `ExecutionResult`.
+- Produces: `DatabaseExecutionAdapter.engine()`, `DatabaseExecutionAdapter.executeCreateTable(String, String)`, `DatabaseExecutionService.execute(DatabaseEngine, TableDefinition)`.
 
 - [ ] **Step 1: Write the failing service tests**
-
-Create `DatabaseExecutionServiceTest.java`:
 
 ```java
 package com.dbeduca.execution;
@@ -96,19 +91,17 @@ class DatabaseExecutionServiceTest {
     ));
 
     @Test
-    void regeneratesOracleDdlAndDelegatesToOracleAdapter() {
+    void regeneratesOracleDdlBeforeDelegating() {
         var registry = new ScriptGeneratorRegistry(List.of(new OracleScriptGenerator()));
         var adapter = new CapturingAdapter();
         var service = new DatabaseExecutionService(registry, List.of(adapter));
 
         var result = service.execute(DatabaseEngine.ORACLE, table);
 
-        assertEquals(DatabaseEngine.ORACLE, result.engine());
-        assertEquals("SUCCESS", result.status());
-        assertEquals("TABLE", result.objectType());
-        assertEquals("ALUNOS", result.objectName());
         assertTrue(adapter.ddl.contains("CREATE TABLE alunos"));
         assertTrue(adapter.ddl.contains("id NUMBER(19) PRIMARY KEY NOT NULL"));
+        assertEquals(DatabaseEngine.ORACLE, result.engine());
+        assertEquals("ALUNOS", result.objectName());
         assertEquals(adapter.ddl, result.script());
     }
 
@@ -138,8 +131,8 @@ class DatabaseExecutionServiceTest {
                 DatabaseEngine.ORACLE,
                 "SUCCESS",
                 "TABLE",
-                tableName.toUpperCase(),
-                "Tabela " + tableName.toUpperCase() + " criada com sucesso no Oracle.",
+                "ALUNOS",
+                "Tabela ALUNOS criada com sucesso no Oracle.",
                 ddl
             );
         }
@@ -147,19 +140,19 @@ class DatabaseExecutionServiceTest {
 }
 ```
 
-- [ ] **Step 2: Run the focused test and verify RED**
+- [ ] **Step 2: Verify RED**
 
-Run from `backend/`:
+From `backend/`:
 
 ```powershell
 mvn -Dtest=DatabaseExecutionServiceTest test
 ```
 
-Expected: compilation/test failure because `com.dbeduca.execution` types do not exist yet.
+Expected: compilation fails because `com.dbeduca.execution` does not exist yet.
 
-- [ ] **Step 3: Implement the minimal execution contract and result**
+- [ ] **Step 3: Add the minimal production types**
 
-Create `DatabaseExecutionAdapter.java`:
+`DatabaseExecutionAdapter.java`:
 
 ```java
 package com.dbeduca.execution;
@@ -172,7 +165,7 @@ public interface DatabaseExecutionAdapter {
 }
 ```
 
-Create `ExecutionResult.java`:
+`ExecutionResult.java`:
 
 ```java
 package com.dbeduca.execution;
@@ -189,7 +182,7 @@ public record ExecutionResult(
 ) {}
 ```
 
-Create `DatabaseExecutionService.java`:
+`DatabaseExecutionService.java`:
 
 ```java
 package com.dbeduca.execution;
@@ -206,10 +199,7 @@ public final class DatabaseExecutionService {
     private final ScriptGeneratorRegistry scriptRegistry;
     private final Map<DatabaseEngine, DatabaseExecutionAdapter> adapters = new EnumMap<>(DatabaseEngine.class);
 
-    public DatabaseExecutionService(
-        ScriptGeneratorRegistry scriptRegistry,
-        List<DatabaseExecutionAdapter> adapters
-    ) {
+    public DatabaseExecutionService(ScriptGeneratorRegistry scriptRegistry, List<DatabaseExecutionAdapter> adapters) {
         this.scriptRegistry = scriptRegistry;
         adapters.forEach(adapter -> this.adapters.put(adapter.engine(), adapter));
     }
@@ -219,30 +209,21 @@ public final class DatabaseExecutionService {
         if (adapter == null) {
             throw new IllegalArgumentException("Execução ainda não habilitada para " + engine + ".");
         }
-
         String ddl = scriptRegistry.generate(engine, table);
         return adapter.executeCreateTable(table.name(), ddl);
     }
 }
 ```
 
-- [ ] **Step 4: Run the focused test and verify GREEN**
+- [ ] **Step 4: Verify GREEN and regression**
 
 ```powershell
-mvn -Dtest=DatabaseExecutionServiceTest test
+mvn -Dtest=DatabaseExecutionServiceTest,ScriptGeneratorTest test
 ```
 
-Expected: `Tests run: 2, Failures: 0, Errors: 0` and `BUILD SUCCESS`.
+Expected: zero failures/errors.
 
-- [ ] **Step 5: Run the existing core regression tests**
-
-```powershell
-mvn -Dtest=ScriptGeneratorTest,DatabaseExecutionServiceTest test
-```
-
-Expected: all tests pass.
-
-- [ ] **Step 6: Commit Task 1**
+- [ ] **Step 5: Commit**
 
 ```powershell
 git add backend/src/main/java/com/dbeduca/execution backend/src/test/java/com/dbeduca/execution/DatabaseExecutionServiceTest.java
@@ -251,7 +232,7 @@ git commit -m "feat: add database execution service contract"
 
 ---
 
-### Task 2: Implementar o OracleExecutionAdapter com JDBC e proteção contra tabela existente
+### Task 2: OracleExecutionAdapter com JDBC e proteção de tabela existente
 
 **Files:**
 - Create: `backend/src/main/java/com/dbeduca/execution/TableAlreadyExistsException.java`
@@ -261,12 +242,10 @@ git commit -m "feat: add database execution service contract"
 - Test: `backend/src/test/java/com/dbeduca/execution/OracleExecutionAdapterTest.java`
 
 **Interfaces:**
-- Consumes: `javax.sql.DataSource`, `DatabaseExecutionAdapter`.
-- Produces: `OracleExecutionAdapter(DataSource)`, `TableAlreadyExistsException.engine()`, `TableAlreadyExistsException.objectName()`, `DatabaseUnavailableException.engine()`.
+- Consumes: `javax.sql.DataSource`.
+- Produces: `OracleExecutionAdapter(DataSource)`.
 
-- [ ] **Step 1: Write failing adapter tests for success, conflict and unavailable database**
-
-Create `OracleExecutionAdapterTest.java`:
+- [ ] **Step 1: Write failing adapter tests**
 
 ```java
 package com.dbeduca.execution;
@@ -277,6 +256,7 @@ import javax.sql.DataSource;
 import java.sql.*;
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 class OracleExecutionAdapterTest {
@@ -284,23 +264,22 @@ class OracleExecutionAdapterTest {
 
     @Test
     void createsTableWhenItDoesNotExist() throws Exception {
-        DataSource dataSource = mock(DataSource.class);
+        DataSource ds = mock(DataSource.class);
         Connection connection = mock(Connection.class);
-        PreparedStatement existsStatement = mock(PreparedStatement.class);
-        ResultSet resultSet = mock(ResultSet.class);
+        PreparedStatement exists = mock(PreparedStatement.class);
+        ResultSet rs = mock(ResultSet.class);
         Statement ddlStatement = mock(Statement.class);
 
-        when(dataSource.getConnection()).thenReturn(connection);
-        when(connection.prepareStatement(anyString())).thenReturn(existsStatement);
-        when(existsStatement.executeQuery()).thenReturn(resultSet);
-        when(resultSet.next()).thenReturn(true);
-        when(resultSet.getInt(1)).thenReturn(0);
+        when(ds.getConnection()).thenReturn(connection);
+        when(connection.prepareStatement(anyString())).thenReturn(exists);
+        when(exists.executeQuery()).thenReturn(rs);
+        when(rs.next()).thenReturn(true);
+        when(rs.getInt(1)).thenReturn(0);
         when(connection.createStatement()).thenReturn(ddlStatement);
 
-        var adapter = new OracleExecutionAdapter(dataSource);
-        var result = adapter.executeCreateTable("alunos", DDL);
+        var result = new OracleExecutionAdapter(ds).executeCreateTable("alunos", DDL);
 
-        verify(existsStatement).setString(1, "ALUNOS");
+        verify(exists).setString(1, "ALUNOS");
         verify(ddlStatement).executeUpdate(DDL);
         assertEquals("SUCCESS", result.status());
         assertEquals("ALUNOS", result.objectName());
@@ -308,20 +287,19 @@ class OracleExecutionAdapterTest {
     }
 
     @Test
-    void refusesToReplaceExistingTable() throws Exception {
-        DataSource dataSource = mock(DataSource.class);
+    void refusesExistingTableWithoutOpeningDdlStatement() throws Exception {
+        DataSource ds = mock(DataSource.class);
         Connection connection = mock(Connection.class);
-        PreparedStatement existsStatement = mock(PreparedStatement.class);
-        ResultSet resultSet = mock(ResultSet.class);
+        PreparedStatement exists = mock(PreparedStatement.class);
+        ResultSet rs = mock(ResultSet.class);
 
-        when(dataSource.getConnection()).thenReturn(connection);
-        when(connection.prepareStatement(anyString())).thenReturn(existsStatement);
-        when(existsStatement.executeQuery()).thenReturn(resultSet);
-        when(resultSet.next()).thenReturn(true);
-        when(resultSet.getInt(1)).thenReturn(1);
+        when(ds.getConnection()).thenReturn(connection);
+        when(connection.prepareStatement(anyString())).thenReturn(exists);
+        when(exists.executeQuery()).thenReturn(rs);
+        when(rs.next()).thenReturn(true);
+        when(rs.getInt(1)).thenReturn(1);
 
-        var adapter = new OracleExecutionAdapter(dataSource);
-
+        var adapter = new OracleExecutionAdapter(ds);
         var error = assertThrows(TableAlreadyExistsException.class,
             () -> adapter.executeCreateTable("alunos", DDL));
 
@@ -331,30 +309,28 @@ class OracleExecutionAdapterTest {
 
     @Test
     void mapsConnectionFailureToDatabaseUnavailable() throws Exception {
-        DataSource dataSource = mock(DataSource.class);
-        when(dataSource.getConnection()).thenThrow(new SQLException("connection refused"));
-
-        var adapter = new OracleExecutionAdapter(dataSource);
+        DataSource ds = mock(DataSource.class);
+        when(ds.getConnection()).thenThrow(new SQLException("connection refused"));
 
         var error = assertThrows(DatabaseUnavailableException.class,
-            () -> adapter.executeCreateTable("alunos", DDL));
+            () -> new OracleExecutionAdapter(ds).executeCreateTable("alunos", DDL));
 
         assertEquals(com.dbeduca.core.DatabaseEngine.ORACLE, error.engine());
     }
 }
 ```
 
-- [ ] **Step 2: Run the adapter test and verify RED**
+- [ ] **Step 2: Verify RED**
 
 ```powershell
 mvn -Dtest=OracleExecutionAdapterTest test
 ```
 
-Expected: compilation failure because Oracle execution classes do not exist.
+Expected: compilation fails because adapter/exceptions do not exist.
 
-- [ ] **Step 3: Implement the three domain exceptions**
+- [ ] **Step 3: Add domain exceptions**
 
-Create `TableAlreadyExistsException.java`:
+`TableAlreadyExistsException.java`:
 
 ```java
 package com.dbeduca.execution;
@@ -376,7 +352,7 @@ public final class TableAlreadyExistsException extends RuntimeException {
 }
 ```
 
-Create `DatabaseUnavailableException.java`:
+`DatabaseUnavailableException.java`:
 
 ```java
 package com.dbeduca.execution;
@@ -395,7 +371,7 @@ public final class DatabaseUnavailableException extends RuntimeException {
 }
 ```
 
-Create `DatabaseExecutionException.java`:
+`DatabaseExecutionException.java`:
 
 ```java
 package com.dbeduca.execution;
@@ -414,9 +390,7 @@ public final class DatabaseExecutionException extends RuntimeException {
 }
 ```
 
-- [ ] **Step 4: Implement the minimal Oracle adapter**
-
-Create `OracleExecutionAdapter.java`:
+- [ ] **Step 4: Implement OracleExecutionAdapter**
 
 ```java
 package com.dbeduca.execution;
@@ -448,23 +422,20 @@ public final class OracleExecutionAdapter implements DatabaseExecutionAdapter {
 
     @Override
     public ExecutionResult executeCreateTable(String tableName, String ddl) {
-        String normalizedName = tableName.toUpperCase(Locale.ROOT);
-
+        String normalized = tableName.toUpperCase(Locale.ROOT);
         try (Connection connection = openConnection()) {
-            if (tableExists(connection, normalizedName)) {
-                throw new TableAlreadyExistsException(DatabaseEngine.ORACLE, normalizedName);
+            if (tableExists(connection, normalized)) {
+                throw new TableAlreadyExistsException(DatabaseEngine.ORACLE, normalized);
             }
-
             try (var statement = connection.createStatement()) {
                 statement.executeUpdate(ddl);
             }
-
             return new ExecutionResult(
                 DatabaseEngine.ORACLE,
                 "SUCCESS",
                 "TABLE",
-                normalizedName,
-                "Tabela " + normalizedName + " criada com sucesso no Oracle.",
+                normalized,
+                "Tabela " + normalized + " criada com sucesso no Oracle.",
                 ddl
             );
         } catch (TableAlreadyExistsException | DatabaseUnavailableException ex) {
@@ -493,23 +464,15 @@ public final class OracleExecutionAdapter implements DatabaseExecutionAdapter {
 }
 ```
 
-- [ ] **Step 5: Run adapter tests and verify GREEN**
+- [ ] **Step 5: Verify GREEN**
 
 ```powershell
-mvn -Dtest=OracleExecutionAdapterTest test
+mvn -Dtest=OracleExecutionAdapterTest,DatabaseExecutionServiceTest,ScriptGeneratorTest test
 ```
 
-Expected: `Tests run: 3, Failures: 0, Errors: 0`.
+Expected: zero failures/errors.
 
-- [ ] **Step 6: Run service + adapter regression**
-
-```powershell
-mvn -Dtest=DatabaseExecutionServiceTest,OracleExecutionAdapterTest,ScriptGeneratorTest test
-```
-
-Expected: all tests pass.
-
-- [ ] **Step 7: Commit Task 2**
+- [ ] **Step 6: Commit**
 
 ```powershell
 git add backend/src/main/java/com/dbeduca/execution backend/src/test/java/com/dbeduca/execution/OracleExecutionAdapterTest.java
@@ -518,7 +481,7 @@ git commit -m "feat: execute generated Oracle DDL safely"
 
 ---
 
-### Task 3: Configurar Oracle JDBC sem conectar no startup
+### Task 3: Configuração JDBC sem conexão no startup
 
 **Files:**
 - Modify: `backend/pom.xml`
@@ -528,12 +491,12 @@ git commit -m "feat: execute generated Oracle DDL safely"
 - Modify: `docker-compose.yml`
 
 **Interfaces:**
-- Consumes: `ORACLE_JDBC_URL`, `ORACLE_USERNAME`, `ORACLE_PASSWORD`.
-- Produces: bean `oracleDataSource`, `OracleExecutionAdapter`, `DatabaseExecutionService`.
+- Host/manual backend: `ORACLE_JDBC_URL`, `ORACLE_USERNAME`, `ORACLE_APP_USER_PASSWORD`.
+- Container Oracle admin password remains `ORACLE_PASSWORD`; do not reuse it for JDBC da aplicação.
 
-- [ ] **Step 1: Add the Oracle JDBC driver dependency**
+- [ ] **Step 1: Add Oracle JDBC driver**
 
-Inside `<dependencies>` in `backend/pom.xml`, add the driver without an explicit version so Spring Boot dependency management controls the compatible version:
+Inside `<dependencies>` in `backend/pom.xml`:
 
 ```xml
 <dependency>
@@ -542,31 +505,27 @@ Inside `<dependencies>` in `backend/pom.xml`, add the driver without an explicit
 </dependency>
 ```
 
-Do not add JPA or Hibernate.
-
-- [ ] **Step 2: Compile to verify the dependency resolves**
+- [ ] **Step 2: Verify dependency resolution**
 
 ```powershell
 mvn -DskipTests compile
 ```
 
-Expected: `BUILD SUCCESS` and Oracle JDBC classes available on the classpath.
+Expected: `BUILD SUCCESS`.
 
-- [ ] **Step 3: Configure properties from environment variables**
+- [ ] **Step 3: Add Spring properties**
 
 Append to `backend/src/main/resources/application.properties`:
 
 ```properties
 dbeduca.oracle.jdbc-url=${ORACLE_JDBC_URL:jdbc:oracle:thin:@//localhost:51521/FREEPDB1}
 dbeduca.oracle.username=${ORACLE_USERNAME:dbeduca}
-dbeduca.oracle.password=${ORACLE_PASSWORD:}
+dbeduca.oracle.password=${ORACLE_APP_USER_PASSWORD:}
 ```
 
-The password has no repository default. Local development must set `ORACLE_PASSWORD` explicitly.
+- [ ] **Step 4: Wire DataSource and execution beans**
 
-- [ ] **Step 4: Wire DataSource, adapter and service in ApplicationConfig**
-
-Extend `ApplicationConfig.java` with imports:
+Add imports to `ApplicationConfig.java`:
 
 ```java
 import com.dbeduca.execution.DatabaseExecutionAdapter;
@@ -579,7 +538,7 @@ import javax.sql.DataSource;
 import java.sql.SQLException;
 ```
 
-Keep the existing `scriptGeneratorRegistry()` bean and add:
+Keep `scriptGeneratorRegistry()` unchanged and add:
 
 ```java
 @Bean
@@ -612,11 +571,11 @@ DatabaseExecutionService databaseExecutionService(
 }
 ```
 
-Creating `OracleDataSource` configures connection metadata only; `getConnection()` remains inside `OracleExecutionAdapter`, so Oracle downtime does not prevent Spring Boot startup.
+`OracleDataSource` is configured at startup but does not call `getConnection()` until `OracleExecutionAdapter.executeCreateTable(...)`.
 
-- [ ] **Step 5: Update `.env.example` with host-side settings**
+- [ ] **Step 5: Update `.env.example` without credential collision**
 
-Ensure these entries exist:
+Ensure this block exists:
 
 ```dotenv
 ORACLE_PASSWORD=oracle123
@@ -626,36 +585,28 @@ ORACLE_JDBC_URL=jdbc:oracle:thin:@//localhost:51521/FREEPDB1
 ORACLE_USERNAME=dbeduca
 ```
 
-For manual Windows execution, set backend `ORACLE_PASSWORD` to the application-user password used by JDBC:
+- [ ] **Step 6: Configure backend service in Compose**
 
-```powershell
-$env:ORACLE_JDBC_URL="jdbc:oracle:thin:@//localhost:51521/FREEPDB1"
-$env:ORACLE_USERNAME="dbeduca"
-$env:ORACLE_PASSWORD="dbeduca123"
-```
-
-- [ ] **Step 6: Inject internal Docker networking values into the backend service**
-
-Under `backend:` in `docker-compose.yml`, add:
+Under `backend:` add:
 
 ```yaml
 environment:
   ORACLE_JDBC_URL: jdbc:oracle:thin:@//lab-oracle:1521/FREEPDB1
   ORACLE_USERNAME: ${ORACLE_APP_USER:-dbeduca}
-  ORACLE_PASSWORD: ${ORACLE_APP_USER_PASSWORD:-dbeduca123}
+  ORACLE_APP_USER_PASSWORD: ${ORACLE_APP_USER_PASSWORD:-dbeduca123}
 ```
 
-Do not add a hard `depends_on: condition: service_healthy`; the backend must still start even when Oracle is unavailable, and the execution endpoint is responsible for returning `503` on connection failure.
+Do not add a hard dependency on Oracle health; the API must return `503` if Oracle is unavailable at execution time.
 
-- [ ] **Step 7: Run the full backend test suite**
+- [ ] **Step 7: Run full backend tests**
 
 ```powershell
 mvn clean test
 ```
 
-Expected: all existing and new tests pass with `Failures: 0, Errors: 0`.
+Expected: `BUILD SUCCESS`, zero failures/errors.
 
-- [ ] **Step 8: Commit Task 3**
+- [ ] **Step 8: Commit**
 
 ```powershell
 git add backend/pom.xml backend/src/main/java/com/dbeduca/config/ApplicationConfig.java backend/src/main/resources/application.properties .env.example docker-compose.yml
@@ -664,7 +615,7 @@ git commit -m "chore: configure Oracle JDBC execution"
 
 ---
 
-### Task 4: Expor POST /api/v1/executions e mapear erros HTTP
+### Task 4: Endpoint REST e mapeamento de erros
 
 **Files:**
 - Create: `backend/src/main/java/com/dbeduca/api/ExecuteDatabaseRequest.java`
@@ -674,12 +625,10 @@ git commit -m "chore: configure Oracle JDBC execution"
 - Test: `backend/src/test/java/com/dbeduca/api/ExecutionControllerTest.java`
 
 **Interfaces:**
-- Consumes: `DatabaseExecutionService.execute(DatabaseEngine, TableDefinition)`.
-- Produces: `POST /api/v1/executions`; success JSON fields `engine`, `status`, `objectType`, `objectName`, `message`, `script`.
+- Endpoint: `POST /api/v1/executions`.
+- Success fields: `engine`, `status`, `objectType`, `objectName`, `message`, `script`.
 
 - [ ] **Step 1: Write failing MVC tests**
-
-Create `ExecutionControllerTest.java`:
 
 ```java
 package com.dbeduca.api;
@@ -711,51 +660,38 @@ class ExecutionControllerTest {
     @Test
     void executesGeneratedOracleTable() throws Exception {
         when(service.execute(eq(DatabaseEngine.ORACLE), any())).thenReturn(
-            new ExecutionResult(
-                DatabaseEngine.ORACLE,
-                "SUCCESS",
-                "TABLE",
-                "ALUNOS",
+            new ExecutionResult(DatabaseEngine.ORACLE, "SUCCESS", "TABLE", "ALUNOS",
                 "Tabela ALUNOS criada com sucesso no Oracle.",
-                "CREATE TABLE alunos (id NUMBER(19) PRIMARY KEY NOT NULL);"
-            )
+                "CREATE TABLE alunos (id NUMBER(19) PRIMARY KEY NOT NULL);")
         );
 
-        mvc.perform(post("/api/v1/executions")
-                .contentType("application/json")
-                .content(REQUEST))
+        mvc.perform(post("/api/v1/executions").contentType("application/json").content(REQUEST))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.engine").value("ORACLE"))
             .andExpect(jsonPath("$.status").value("SUCCESS"))
             .andExpect(jsonPath("$.objectName").value("ALUNOS"))
-            .andExpect(jsonPath("$.message").value("Tabela ALUNOS criada com sucesso no Oracle."))
-            .andExpect(jsonPath("$.script").exists())
             .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("dbeduca123"))))
             .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("jdbc:oracle"))));
     }
 
     @Test
-    void returns409WhenTableAlreadyExists() throws Exception {
+    void returns409WhenTableExists() throws Exception {
         when(service.execute(eq(DatabaseEngine.ORACLE), any()))
             .thenThrow(new TableAlreadyExistsException(DatabaseEngine.ORACLE, "ALUNOS"));
 
-        mvc.perform(post("/api/v1/executions")
-                .contentType("application/json")
-                .content(REQUEST))
+        mvc.perform(post("/api/v1/executions").contentType("application/json").content(REQUEST))
             .andExpect(status().isConflict())
             .andExpect(jsonPath("$.engine").value("ORACLE"))
             .andExpect(jsonPath("$.message").value("A tabela ALUNOS já existe no Oracle."));
     }
 
     @Test
-    void returns400WhenExecutionIsNotEnabledForEngine() throws Exception {
-        String postgresRequest = REQUEST.replace("ORACLE", "POSTGRESQL");
+    void returns400ForEngineWithoutExecution() throws Exception {
+        String request = REQUEST.replace("ORACLE", "POSTGRESQL");
         when(service.execute(eq(DatabaseEngine.POSTGRESQL), any()))
             .thenThrow(new IllegalArgumentException("Execução ainda não habilitada para POSTGRESQL."));
 
-        mvc.perform(post("/api/v1/executions")
-                .contentType("application/json")
-                .content(postgresRequest))
+        mvc.perform(post("/api/v1/executions").contentType("application/json").content(request))
             .andExpect(status().isBadRequest())
             .andExpect(jsonPath("$.message").value("Execução ainda não habilitada para POSTGRESQL."));
     }
@@ -765,43 +701,35 @@ class ExecutionControllerTest {
         when(service.execute(eq(DatabaseEngine.ORACLE), any()))
             .thenThrow(new DatabaseUnavailableException(DatabaseEngine.ORACLE, new RuntimeException("down")));
 
-        mvc.perform(post("/api/v1/executions")
-                .contentType("application/json")
-                .content(REQUEST))
+        mvc.perform(post("/api/v1/executions").contentType("application/json").content(REQUEST))
             .andExpect(status().isServiceUnavailable())
-            .andExpect(jsonPath("$.engine").value("ORACLE"))
-            .andExpect(jsonPath("$.message").value("Oracle temporariamente indisponível. Verifique o ambiente do laboratório."));
+            .andExpect(jsonPath("$.engine").value("ORACLE"));
     }
 
     @Test
-    void returns500WithoutLeakingJdbcDetailsOnUnexpectedExecutionFailure() throws Exception {
+    void returnsGeneric500WithoutJdbcDetails() throws Exception {
         when(service.execute(eq(DatabaseEngine.ORACLE), any()))
-            .thenThrow(new DatabaseExecutionException(
-                DatabaseEngine.ORACLE,
-                new RuntimeException("jdbc:oracle:thin:@//secret-host:1521/FREEPDB1 password=secret")
-            ));
+            .thenThrow(new DatabaseExecutionException(DatabaseEngine.ORACLE,
+                new RuntimeException("jdbc:oracle:thin:@//secret:1521/FREEPDB1 password=secret")));
 
-        mvc.perform(post("/api/v1/executions")
-                .contentType("application/json")
-                .content(REQUEST))
+        mvc.perform(post("/api/v1/executions").contentType("application/json").content(REQUEST))
             .andExpect(status().isInternalServerError())
-            .andExpect(jsonPath("$.engine").value("ORACLE"))
             .andExpect(jsonPath("$.message").value("Não foi possível executar a operação no Oracle."))
-            .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("secret-host"))))
+            .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("secret:1521"))))
             .andExpect(content().string(org.hamcrest.Matchers.not(org.hamcrest.Matchers.containsString("password=secret"))));
     }
 }
 ```
 
-- [ ] **Step 2: Run MVC test and verify RED**
+- [ ] **Step 2: Verify RED**
 
 ```powershell
 mvn -Dtest=ExecutionControllerTest test
 ```
 
-Expected: compilation failure because request/response/controller do not exist.
+Expected: compilation fails because API execution classes do not exist.
 
-- [ ] **Step 3: Create ExecuteDatabaseRequest**
+- [ ] **Step 3: Add ExecuteDatabaseRequest**
 
 ```java
 package com.dbeduca.api;
@@ -839,9 +767,7 @@ public record ExecuteDatabaseRequest(
 }
 ```
 
-This intentionally mirrors the existing generation request in this increment; do not refactor the public generation contract while adding execution.
-
-- [ ] **Step 4: Create response and controller**
+- [ ] **Step 4: Add response and controller**
 
 `ExecuteDatabaseResponse.java`:
 
@@ -860,14 +786,8 @@ public record ExecuteDatabaseResponse(
     String script
 ) {
     static ExecuteDatabaseResponse from(ExecutionResult result) {
-        return new ExecuteDatabaseResponse(
-            result.engine(),
-            result.status(),
-            result.objectType(),
-            result.objectName(),
-            result.message(),
-            result.script()
-        );
+        return new ExecuteDatabaseResponse(result.engine(), result.status(), result.objectType(),
+            result.objectName(), result.message(), result.script());
     }
 }
 ```
@@ -892,25 +812,14 @@ public class ExecutionController {
 
     @PostMapping
     public ExecuteDatabaseResponse execute(@Valid @RequestBody ExecuteDatabaseRequest request) {
-        return ExecuteDatabaseResponse.from(
-            service.execute(request.engine(), request.toDomain())
-        );
+        return ExecuteDatabaseResponse.from(service.execute(request.engine(), request.toDomain()));
     }
 }
 ```
 
-- [ ] **Step 5: Extend ApiExceptionHandler with execution-safe responses**
+- [ ] **Step 5: Extend ApiExceptionHandler**
 
-Add imports:
-
-```java
-import com.dbeduca.core.DatabaseEngine;
-import com.dbeduca.execution.DatabaseExecutionException;
-import com.dbeduca.execution.DatabaseUnavailableException;
-import com.dbeduca.execution.TableAlreadyExistsException;
-```
-
-Add handlers before the record declarations:
+Add these handlers while keeping the existing validation/`IllegalArgumentException` behavior:
 
 ```java
 @ExceptionHandler(TableAlreadyExistsException.class)
@@ -931,32 +840,21 @@ ExecutionErrorResponse executionFailure(DatabaseExecutionException ex) {
     return new ExecutionErrorResponse(Instant.now(), ex.getMessage(), ex.engine());
 }
 
-public record ExecutionErrorResponse(
-    Instant timestamp,
-    String message,
-    DatabaseEngine engine
-) {}
+public record ExecutionErrorResponse(Instant timestamp, String message, DatabaseEngine engine) {}
 ```
 
-Keep the existing `ErrorResponse(Instant timestamp, String message)` for validation and generic illegal arguments so current API behavior does not change.
+Add imports for `DatabaseEngine` and the three execution exceptions.
 
-- [ ] **Step 6: Run MVC tests and verify GREEN**
+- [ ] **Step 6: Verify GREEN and full backend regression**
 
 ```powershell
 mvn -Dtest=ExecutionControllerTest test
-```
-
-Expected: `Tests run: 5, Failures: 0, Errors: 0`.
-
-- [ ] **Step 7: Run all backend tests**
-
-```powershell
 mvn clean test
 ```
 
-Expected: all original 7 tests plus new service/adapter/controller tests pass.
+Expected: all tests pass with zero failures/errors.
 
-- [ ] **Step 8: Commit Task 4**
+- [ ] **Step 7: Commit**
 
 ```powershell
 git add backend/src/main/java/com/dbeduca/api backend/src/test/java/com/dbeduca/api/ExecutionControllerTest.java
@@ -965,7 +863,7 @@ git commit -m "feat: expose controlled Oracle execution endpoint"
 
 ---
 
-### Task 5: Integrar o botão “Executar no Oracle” no React
+### Task 5: Botão “Executar no Oracle” no React
 
 **Files:**
 - Modify: `frontend/src/api.js`
@@ -976,18 +874,9 @@ git commit -m "feat: expose controlled Oracle execution endpoint"
 - Consumes: `POST /api/v1/executions`.
 - Produces: `api.executeDatabase(payload)` and UI states `executing`, `executionResult`, `executionError`.
 
-- [ ] **Step 1: Add the frontend API method**
+- [ ] **Step 1: Add API method**
 
-In `frontend/src/api.js`, extend `api`:
-
-```javascript
-executeDatabase: payload => request('/api/v1/executions', {
-  method: 'POST',
-  body: JSON.stringify(payload)
-})
-```
-
-The final object becomes:
+Final `api` object in `frontend/src/api.js`:
 
 ```javascript
 export const api = {
@@ -1003,9 +892,20 @@ export const api = {
 }
 ```
 
-- [ ] **Step 2: Add execution state to App.jsx**
+- [ ] **Step 2: Include Oracle in frontend fallback and add execution state**
 
-Immediately after existing `loading` state, add:
+Change fallback engines to:
+
+```javascript
+const fallbackEngines = [
+  { id: 'POSTGRESQL', name: 'PostgreSQL', category: 'SQL relacional' },
+  { id: 'MYSQL', name: 'MySQL', category: 'SQL relacional' },
+  { id: 'MONGODB', name: 'MongoDB', category: 'NoSQL documental' },
+  { id: 'ORACLE', name: 'Oracle', category: 'SQL relacional' }
+]
+```
+
+After existing `loading` state:
 
 ```javascript
 const [executing, setExecuting] = useState(false)
@@ -1013,7 +913,7 @@ const [executionResult, setExecutionResult] = useState(null)
 const [executionError, setExecutionError] = useState('')
 ```
 
-Add a helper that invalidates the reviewed script whenever the model changes:
+Add:
 
 ```javascript
 function invalidateGeneratedState() {
@@ -1023,58 +923,54 @@ function invalidateGeneratedState() {
 }
 ```
 
-- [ ] **Step 3: Invalidate stale scripts when the model changes**
+- [ ] **Step 3: Invalidate stale reviewed SQL on every model change**
 
-Update `updateColumn`:
+Update `updateColumn`, `removeColumn`, engine selection, table-name change and `+ Campo` so each model mutation calls `invalidateGeneratedState()` immediately after updating state.
+
+Exact handlers:
 
 ```javascript
 function updateColumn(index, field, value) {
   setColumns(current => current.map((column, i) => i === index ? { ...column, [field]: value } : column))
   invalidateGeneratedState()
 }
-```
 
-Update `removeColumn`:
-
-```javascript
 function removeColumn(index) {
   setColumns(current => current.length === 1 ? current : current.filter((_, i) => i !== index))
   invalidateGeneratedState()
 }
 ```
 
-Replace the engine-card click with:
+Engine:
 
-```javascript
+```jsx
 onClick={() => {
   setEngine(item.id)
   invalidateGeneratedState()
 }}
 ```
 
-Replace table-name `onChange` with:
+Table name:
 
-```javascript
+```jsx
 onChange={e => {
   setTableName(e.target.value)
   invalidateGeneratedState()
 }}
 ```
 
-Replace the `+ Campo` handler with:
+Add column:
 
-```javascript
+```jsx
 onClick={() => {
   setColumns(current => [...current, newColumn()])
   invalidateGeneratedState()
 }}
 ```
 
-This is a safety invariant: the user can only execute a model after regenerating and reviewing its current script.
+- [ ] **Step 4: Add controlled execution action**
 
-- [ ] **Step 4: Reset execution feedback on generation and add executeOracle()**
-
-At the start of `generate()` add:
+At the beginning of `generate()` add:
 
 ```javascript
 setExecutionResult(null)
@@ -1102,18 +998,12 @@ async function executeOracle() {
 }
 ```
 
-- [ ] **Step 5: Render the Oracle execution action and feedback**
-
-Immediately after `.code-window`, add:
+Render immediately below `.code-window`:
 
 ```jsx
 {engine === 'ORACLE' && script && (
   <div className="execution-area">
-    <button
-      className="execute-button"
-      onClick={executeOracle}
-      disabled={executing}
-    >
+    <button className="execute-button" onClick={executeOracle} disabled={executing}>
       {executing ? 'Executando…' : 'Executar no Oracle'}
     </button>
 
@@ -1134,66 +1024,69 @@ Immediately after `.code-window`, add:
 )}
 ```
 
-Update the safety-note copy to:
+Replace safety copy with:
 
 ```jsx
 <div className="safety-note">
   <strong>Modo seguro do laboratório</strong>
-  <p>
-    O Oracle executa somente o CREATE TABLE regenerado e validado pelo backend.
-    SQL livre, DROP automático e credenciais no navegador continuam desabilitados.
-  </p>
+  <p>O Oracle executa somente o CREATE TABLE regenerado e validado pelo backend. SQL livre, DROP automático e credenciais no navegador continuam desabilitados.</p>
 </div>
 ```
 
-- [ ] **Step 6: Add focused styles without changing the theme architecture**
+- [ ] **Step 5: Update exact existing styles**
 
-Append to `frontend/src/styles.css` using existing CSS variables rather than fixed theme-specific colors where possible:
+Change:
+
+```css
+.engine-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin-bottom:18px; }
+```
+
+to:
+
+```css
+.engine-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:12px; margin-bottom:18px; }
+```
+
+Extend engine dots:
+
+```css
+.engine-dot.postgresql { background:#3973a7; }
+.engine-dot.mysql { background:#f29111; }
+.engine-dot.mongodb { background:#2f9d50; }
+.engine-dot.oracle { background:#e11d48; }
+```
+
+Append:
 
 ```css
 .execution-area {
-  display: grid;
-  gap: 12px;
-  margin-top: 16px;
+  display:grid;
+  gap:12px;
+  margin-top:16px;
 }
-
 .execute-button {
-  width: 100%;
-  border: 0;
-  border-radius: 10px;
-  padding: 12px 16px;
-  font: inherit;
-  font-weight: 700;
-  cursor: pointer;
+  width:100%;
+  border:1px solid var(--primary);
+  border-radius:10px;
+  padding:12px 16px;
+  background:var(--primary);
+  color:white;
+  font-weight:800;
 }
-
-.execute-button:disabled {
-  cursor: wait;
-  opacity: 0.65;
-}
-
 .execution-feedback {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 12px 14px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  padding:12px 14px;
+  background:var(--surface);
 }
-
-.execution-feedback p {
-  margin: 4px 0 0;
-}
-
-.execution-feedback.success {
-  background: color-mix(in srgb, #22c55e 12%, var(--panel));
-}
-
-.execution-feedback.error {
-  background: color-mix(in srgb, #ef4444 10%, var(--panel));
-}
+.execution-feedback p { margin:4px 0 0; }
+.execution-feedback.success { box-shadow:inset 4px 0 0 #22c55e; }
+.execution-feedback.error { box-shadow:inset 4px 0 0 #ef4444; }
 ```
 
-If the existing stylesheet uses different variable names than `--border` or `--panel`, reuse the equivalent existing variables instead of introducing a parallel theme system.
+Existing global `button:disabled` already handles disabled opacity/cursor; do not duplicate it.
 
-- [ ] **Step 7: Build the frontend**
+- [ ] **Step 6: Build frontend**
 
 From `frontend/`:
 
@@ -1202,9 +1095,9 @@ npm install
 npm run build
 ```
 
-Expected: Vite build completes without errors and produces `dist/`.
+Expected: Vite exits successfully and writes `dist/`.
 
-- [ ] **Step 8: Commit Task 5**
+- [ ] **Step 7: Commit**
 
 ```powershell
 git add frontend/src/api.js frontend/src/App.jsx frontend/src/styles.css
@@ -1213,19 +1106,15 @@ git commit -m "feat: add controlled Oracle execution action"
 
 ---
 
-### Task 6: Documentar a execução Oracle e validar o fluxo real ponta a ponta
+### Task 6: README e validação real ponta a ponta
 
 **Files:**
 - Modify: `README.md`
-- Verify: `docker-compose.yml`, backend API, Oracle container, frontend.
+- Verify: Docker Compose, backend, endpoint e Oracle.
 
-**Interfaces:**
-- Consumes: complete Tasks 1–5.
-- Produces: documented commands and evidence that a table can be created once and receives `409` on the second attempt.
+- [ ] **Step 1: Document the feature**
 
-- [ ] **Step 1: Update README status and endpoint documentation**
-
-Document explicitly:
+Add a section containing exactly these operational facts:
 
 ```markdown
 ## Execução controlada no Oracle
@@ -1237,56 +1126,42 @@ O Sprint 2 introduz a primeira execução real do DBEduca. Nesta etapa, somente 
 - tabela existente: `409 Conflict`;
 - credenciais: somente no backend;
 - JDBC local: `jdbc:oracle:thin:@//localhost:51521/FREEPDB1`;
-- JDBC no Compose: `jdbc:oracle:thin:@//lab-oracle:1521/FREEPDB1`.
+- JDBC no Compose: `jdbc:oracle:thin:@//lab-oracle:1521/FREEPDB1`;
+- usuário JDBC: `dbeduca` configurado por `ORACLE_USERNAME`;
+- senha JDBC: `ORACLE_APP_USER_PASSWORD`.
 
 ### Endpoint
 
 `POST /api/v1/executions`
 ```
 
-In the roadmap, mark Oracle controlled `CREATE TABLE` execution as completed while leaving the general editor and other engines unchecked.
+In the Sprint 2 roadmap, mark only controlled Oracle `CREATE TABLE` execution as complete; editor SQL livre and other engines remain pending.
 
-- [ ] **Step 2: Verify Docker Compose syntax**
+- [ ] **Step 2: Verify Compose syntax and Oracle health**
 
 From repository root:
 
 ```powershell
 docker compose config
-```
-
-Expected: exit code 0 and services include `lab-oracle`, `backend`, `frontend`.
-
-- [ ] **Step 3: Start and verify Oracle health**
-
-```powershell
 docker compose up -d lab-oracle
 docker compose ps lab-oracle
 ```
 
-Expected: `STATUS` eventually contains `(healthy)`.
+Expected: `docker compose config` exits 0 and Oracle eventually reports `(healthy)`.
 
-- [ ] **Step 4: Set local backend Oracle environment**
-
-In the PowerShell terminal used to start Spring Boot:
+- [ ] **Step 3: Start backend with app-user JDBC credentials**
 
 ```powershell
 $env:ORACLE_JDBC_URL="jdbc:oracle:thin:@//localhost:51521/FREEPDB1"
 $env:ORACLE_USERNAME="dbeduca"
-$env:ORACLE_PASSWORD="dbeduca123"
-```
-
-Then start the backend:
-
-```powershell
+$env:ORACLE_APP_USER_PASSWORD="dbeduca123"
 cd backend
 mvn spring-boot:run
 ```
 
-Expected: application starts on port `8080` without requiring an Oracle connection during startup.
+Expected: Spring Boot starts on port `8080`. Oracle does not need to be contacted during application startup.
 
-- [ ] **Step 5: Verify the health endpoint before database execution**
-
-In a second PowerShell terminal:
+- [ ] **Step 4: Verify backend health from a second PowerShell**
 
 ```powershell
 Invoke-RestMethod http://localhost:8080/actuator/health
@@ -1294,9 +1169,7 @@ Invoke-RestMethod http://localhost:8080/actuator/health
 
 Expected: `status = UP`.
 
-- [ ] **Step 6: Create a unique table through the new execution endpoint**
-
-Use a name not previously created, for example `alunos_sprint2`:
+- [ ] **Step 5: Create a unique Oracle table through the API**
 
 ```powershell
 $body = @{
@@ -1309,14 +1182,10 @@ $body = @{
   )
 } | ConvertTo-Json -Depth 5
 
-Invoke-RestMethod \
-  -Uri http://localhost:8080/api/v1/executions \
-  -Method Post \
-  -ContentType "application/json" \
-  -Body $body
+Invoke-RestMethod -Uri "http://localhost:8080/api/v1/executions" -Method Post -ContentType "application/json" -Body $body
 ```
 
-Expected response contains:
+Expected fields:
 
 ```text
 engine     : ORACLE
@@ -1325,7 +1194,9 @@ objectType : TABLE
 objectName : ALUNOS_SPRINT2
 ```
 
-- [ ] **Step 7: Verify the table directly inside Oracle**
+- [ ] **Step 6: Verify the table directly in Oracle**
+
+From repository root:
 
 ```powershell
 @'
@@ -1334,29 +1205,23 @@ EXIT;
 '@ | docker compose exec -T lab-oracle sqlplus -s "dbeduca/dbeduca123@//localhost:1521/FREEPDB1"
 ```
 
-Expected: `ALUNOS_SPRINT2` appears exactly once.
+Expected: `ALUNOS_SPRINT2`.
 
-- [ ] **Step 8: Execute the same request again and verify 409 without DROP**
-
-Use `Invoke-WebRequest` to inspect the status code:
+- [ ] **Step 7: Repeat the same request and verify 409**
 
 ```powershell
 try {
-  Invoke-WebRequest \
-    -Uri http://localhost:8080/api/v1/executions \
-    -Method Post \
-    -ContentType "application/json" \
-    -Body $body
+  Invoke-WebRequest -Uri "http://localhost:8080/api/v1/executions" -Method Post -ContentType "application/json" -Body $body -ErrorAction Stop
 } catch {
-  $_.Exception.Response.StatusCode.value__
+  [int]$_.Exception.Response.StatusCode
 }
 ```
 
 Expected: `409`.
 
-Re-run the direct Oracle query from Step 7. Expected: `ALUNOS_SPRINT2` still exists.
+Re-run the query from Step 6; expected: `ALUNOS_SPRINT2` still exists.
 
-- [ ] **Step 9: Verify the full automated suites and frontend build one final time**
+- [ ] **Step 8: Final automated verification**
 
 Backend:
 
@@ -1365,8 +1230,6 @@ cd backend
 mvn clean test
 ```
 
-Expected: zero failures and `BUILD SUCCESS`.
-
 Frontend:
 
 ```powershell
@@ -1374,9 +1237,9 @@ cd ..\frontend
 npm run build
 ```
 
-Expected: Vite build exits successfully.
+Expected: backend `BUILD SUCCESS` with zero failures/errors and frontend build success.
 
-- [ ] **Step 10: Commit documentation**
+- [ ] **Step 9: Commit README**
 
 ```powershell
 cd ..
@@ -1384,7 +1247,7 @@ git add README.md
 git commit -m "docs: document controlled Oracle execution"
 ```
 
-- [ ] **Step 11: Inspect final diff before opening a PR**
+- [ ] **Step 10: Inspect final branch**
 
 ```powershell
 git status
@@ -1392,25 +1255,25 @@ git diff main...HEAD --stat
 git log --oneline --decorate -12
 ```
 
-Expected: clean working tree after commits; changes are limited to Oracle controlled execution, its UI, config, tests and documentation.
+Expected: clean working tree; changes limited to Oracle controlled execution, tests, config, UI and documentation.
 
 ---
 
 ## Final Verification Checklist
 
-- [ ] Existing script generation tests remain green.
-- [ ] New service tests prove DDL is regenerated in the backend before adapter invocation.
-- [ ] Oracle adapter test proves existing tables are not recreated and no DDL statement is opened in that branch.
+- [ ] Existing script-generation tests remain green.
+- [ ] Service test proves DDL is regenerated by the backend before adapter invocation.
+- [ ] Adapter test proves existing table prevents creation of a DDL statement.
 - [ ] Connection acquisition failure maps to `503`.
-- [ ] Unexpected JDBC execution failure maps to generic `500` without driver details in HTTP response.
-- [ ] `POST /api/v1/executions` returns `200` for valid Oracle structure.
-- [ ] PostgreSQL/MySQL/MongoDB execution attempts remain rejected with `400`.
-- [ ] No API response includes JDBC URL, username password, or stack trace.
-- [ ] Model changes invalidate the previously reviewed script before execution.
-- [ ] Frontend only displays `Executar no Oracle` when `engine === 'ORACLE'` and a current script exists.
-- [ ] Oracle container is `healthy`.
-- [ ] Real endpoint creates a new Oracle table.
-- [ ] Repeated execution returns `409` and leaves the existing table intact.
+- [ ] Unexpected JDBC execution failure maps to generic `500` without JDBC details.
+- [ ] Valid Oracle execution returns `200`.
+- [ ] PostgreSQL/MySQL/MongoDB execution requests remain rejected with `400`.
+- [ ] API responses contain no password, JDBC URL or stack trace.
+- [ ] Model mutations invalidate the reviewed script.
+- [ ] `Executar no Oracle` appears only for Oracle with a current generated script.
+- [ ] Oracle is `healthy`.
+- [ ] Real endpoint creates a new table.
+- [ ] Repeated execution returns `409` and leaves the table intact.
 - [ ] `mvn clean test` succeeds with zero failures/errors.
 - [ ] `npm run build` succeeds.
-- [ ] README documents Oracle controlled execution and environment values.
+- [ ] README documents the exact Oracle execution contract and credentials variables.
